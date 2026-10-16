@@ -1,0 +1,38 @@
+
+                  _________
+               .-'         '-.
+             .'    .----.     '.
+            /     / o  o \     \____
+           |     |   ^^   |     / __ `~\
+           |     |  \__/ |    | /  \   |
+            \     \____/     \_\__/__/
+             '._           _.'
+                |  |___|  |          /~~~~\
+               /|  |___|  |\________/      \
+              /_|_______|_|\        \______/
+                \_______/  \
+
+  NOXTRACE SECURITY WORKBENCH  |  v0.1.1
+  Black / White / Graphite / Electric Blue
+  Defensive analysis only. Active tests require authorization.
+
+  [01] IP intelligence
+  [02] DNS record lookup
+  [03] Domain syntax check
+  [04] URL syntax check
+  [05] TCP port scan (authorized target only)
+  [06] Web security headers (single HEAD request)
+  [07] TLS certificate inspection
+  [08] File fingerprint
+  [09] Local log triage
+  [10] Source-code pattern audit
+  [11] Java/Maven dependency inventory
+  [12] IOC syntax classifier
+  [13] Password test-value audit
+  [14] Local system information
+  [15] Case note
+  [16] OSV known-vulnerability lookup (online)
+  [17] Polyglot engine status
+  [18] Exit
+
+  noxtrace > 

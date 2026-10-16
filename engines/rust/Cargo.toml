@@ -1,0 +1,8 @@
+[package]
+name = "noxtrace-rs"
+version = "0.1.0"
+edition = "2021"
+description = "NOXTRACE offline classic-PCAP metadata inspector"
+license = "MIT"
+
+[dependencies]

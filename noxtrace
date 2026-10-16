@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Portable project launcher: use the local venv if present, otherwise run from source.
+set -euo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export NOXTRACE_ROOT="$ROOT"
+export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -x "$ROOT/.venv/bin/python" ]]; then
+  exec "$ROOT/.venv/bin/python" -m noxtrace "$@"
+fi
+exec python3 -m noxtrace "$@"

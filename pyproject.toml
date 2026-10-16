@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noxtrace"
+version = "0.1.1"
+description = "A modular, multi-engine defensive security workbench"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "NOXTRACE Contributors" }]
+keywords = ["cybersecurity", "osint", "network-analysis", "defensive-security", "forensics"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dns = ["dnspython>=2.6,<3"]
+
+dev = ["coverage>=7.4"]
+
+[project.scripts]
+noxtrace = "noxtrace.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+noxtrace = ["intro_frames.ansi"]

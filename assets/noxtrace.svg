@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="520" viewBox="0 0 520 520" role="img" aria-labelledby="title desc">
+  <title id="title">NOXTRACE skull and serpent emblem</title>
+  <desc id="desc">A smiling stylized skull within an electric-blue serpent ring on a dark background.</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e2e8f0"/><stop offset=".48" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="520" height="520" rx="44" fill="#080b10"/>
+  <circle cx="260" cy="235" r="174" fill="#0d1420" stroke="#253248" stroke-width="2"/>
+  <path d="M108 305 C58 237 100 144 177 104 C245 69 340 92 387 148 C422 190 417 241 389 278 C367 307 338 317 321 292 C305 268 330 243 352 253 C375 263 363 287 348 288" fill="none" stroke="url(#blue)" stroke-width="18" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M111 306 C166 351 232 360 300 334 C329 323 348 305 355 282" fill="none" stroke="#60a5fa" stroke-width="12" stroke-linecap="round"/>
+  <path d="M355 282 L376 270 L393 280 L382 300 L364 302 Z" fill="url(#blue)" stroke="#dbeafe" stroke-width="2"/>
+  <circle cx="379" cy="284" r="3.8" fill="#080b10"/><path d="M391 289 l14 3 -12 6" fill="none" stroke="#080b10" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M186 166 Q260 128 334 166 Q366 194 354 253 L335 298 Q306 330 260 333 Q214 330 185 298 L166 253 Q154 194 186 166Z" fill="#dbe4ef" stroke="url(#blue)" stroke-width="7"/>
+  <path d="M175 213 Q211 177 245 213 L237 251 Q207 270 182 246Z" fill="#0a1020" stroke="#60a5fa" stroke-width="5"/>
+  <path d="M275 213 Q309 177 345 213 L338 246 Q312 270 283 251Z" fill="#0a1020" stroke="#60a5fa" stroke-width="5"/>
+  <path d="M253 245 L240 280 L260 286 L280 280 L267 245Z" fill="#0a1020" stroke="#64748b" stroke-width="3"/>
+  <path d="M204 290 Q260 320 316 290 L307 321 Q260 346 213 321Z" fill="#0a1020" stroke="#60a5fa" stroke-width="4"/>
+  <path d="M231 296 V323 M250 300 V330 M270 300 V330 M289 296 V323" stroke="#dbeafe" stroke-width="4"/>
+  <path d="M185 165 Q260 130 335 165" fill="none" stroke="#f8fafc" stroke-width="4" opacity=".75"/>
+  <text x="260" y="430" text-anchor="middle" font-family="monospace, sans-serif" font-size="38" font-weight="800" letter-spacing="5" fill="#f1f5f9">NOXTRACE</text>
+  <text x="260" y="461" text-anchor="middle" font-family="monospace, sans-serif" font-size="13" letter-spacing="4" fill="#60a5fa">SECURITY WORKBENCH</text>
+</svg>

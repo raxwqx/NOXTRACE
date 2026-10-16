@@ -1,0 +1,18 @@
+
+[ IP INTELLIGENCE ]
+--------------------------------------------------------------
+  Target  : 8.8.8.8
+  Status  : OK
+  Summary : Classified IPv4 address locally.
+  Address               : 8.8.8.8
+  Version               : 4
+  Is global             : True
+  Is private            : False
+  Is loopback           : False
+  Is link local         : False
+  Is multicast          : False
+  Is reserved           : False
+  Is unspecified        : False
+  Ptr lookup            : not requested
+  Note: Classification was computed locally using Python's ipaddress module.
+  UTC: 2026-10-16T19:16:18+00:00

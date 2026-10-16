@@ -1,0 +1,15 @@
+
+[ TCP PORT SCAN ]
+--------------------------------------------------------------
+  Target  : 127.0.0.1
+  Status  : WARNING
+  Summary : Checked 3 address/port combinations; found 0 open TCP port(s).
+  Resolved addresses    : ['127.0.0.1']
+  Ports requested       : [22, 80, 443]
+  Checked combinations  : 3
+  Open ports            : []
+  Timeout seconds       : 0.1
+  Elapsed seconds       : 0.005
+  Note: TCP connect checks only: no service exploitation, stealth, or UDP scanning.
+  Note: Open ports are not automatically vulnerabilities.
+  UTC: 2026-10-16T19:16:20+00:00

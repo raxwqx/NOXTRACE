@@ -1,0 +1,14 @@
+
+[ SOURCE CODE AUDIT ]
+--------------------------------------------------------------
+  Target  : /mnt/data/NOXTRACE/src/noxtrace/modules
+  Status  : OK
+  Summary : Reviewed 17 source file(s), found 0 pattern match(es).
+  Files scanned         : 17
+  Matches count         : 0
+  Skipped large files   : 0
+  Max file bytes        : 2000000
+  Matches               : []
+  Note: Static pattern review only: matches can be false positives and clean results do not prove code is secure.
+  Note: Source-line text is not copied into the report, which helps reduce accidental disclosure of secrets.
+  UTC: 2026-10-16T19:16:23+00:00

@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+reports/*.json
+reports/*.html
+!reports/.gitkeep
+engines/go/noxtrace-go
+engines/c/noxtrace-c
+engines/rust/target/
+engines/java/build/
+.DS_Store

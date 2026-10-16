@@ -1,0 +1,3 @@
+Oct 16 11:24:01 lab sshd[100]: Failed password for invalid user demo from 192.0.2.44 port 51121 ssh2
+Oct 16 11:26:22 lab sudo: demo : TTY=pts/0 ; COMMAND=/usr/bin/id
+Oct 16 11:28:11 lab sshd[108]: Accepted publickey for labuser
