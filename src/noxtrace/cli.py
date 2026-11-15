@@ -43,6 +43,7 @@ def add_report_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="print result as JSON")
     parser.add_argument("--output", metavar="PATH", help="save a JSON copy to PATH")
     parser.add_argument("--html", metavar="PATH", help="save a self-contained HTML report to PATH")
+    parser.add_argument("--fail-on-findings", action="store_true", help="return exit code 3 when the report contains findings")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,7 +134,9 @@ def display_report(report: dict, args: argparse.Namespace) -> int:
         print(json_text(report))
     else:
         print_report(report)
-    return 2 if report.get("status") == "error" else 0
+    if report.get("status") == "error":
+        return 2
+    return 3 if getattr(args, "fail_on_findings", False) and report.get("findings") else 0
 
 
 def engine_status() -> dict:
