@@ -41,15 +41,25 @@ def check_osv(package: str, version: str, ecosystem: str = "PyPI", timeout: floa
         return make_report("OSV Vulnerability Lookup", target, "error", "OSV returned an unexpected vulnerability list.")
     findings = []
     advisories = []
+    malformed_records = 0
     for item in vulns[:500]:
-        identifier = str(item.get("id") or "OSV record without ID")
+        if not isinstance(item, dict):
+            malformed_records += 1
+            continue
+        identifier = str(item.get("id") or "OSV record without ID")[:200]
         summary = str(item.get("summary") or "No summary supplied")[:500]
-        aliases = [str(value) for value in item.get("aliases", [])[:20] if isinstance(value, str)]
+        aliases_raw = item.get("aliases", [])
+        aliases = [str(value)[:200] for value in aliases_raw[:20] if isinstance(value, str)] if isinstance(aliases_raw, list) else []
         severity_items = item.get("severity") or []
-        scores = [str(entry.get("score")) for entry in severity_items if isinstance(entry, dict) and entry.get("score")]
+        if not isinstance(severity_items, list):
+            severity_items = []
+        scores = [str(entry.get("score"))[:100] for entry in severity_items if isinstance(entry, dict) and entry.get("score")]
         advisory = {"id": identifier, "summary": summary, "aliases": aliases, "modified": item.get("modified"), "severity_scores": scores}
         advisories.append(advisory)
         findings.append({"severity": "REVIEW", "title": identifier, "detail": summary + (f" Aliases: {', '.join(aliases)}." if aliases else "")})
     status = "warning" if advisories else "ok"
-    summary = f"OSV returned {len(vulns)} vulnerability record(s) for the supplied package/version." if advisories else "OSV returned no matching vulnerability record for this package/version."
-    return make_report("OSV Vulnerability Lookup", target, status, summary, {"package": name, "version": release, "ecosystem": eco, "vulnerability_count": len(vulns), "advisories": advisories, "source": OSV_ENDPOINT, "network_lookup_performed": True}, findings, ["Package name, version, and ecosystem were sent to the public OSV API because this query was explicitly requested.", "A positive result needs manual applicability review; an empty result does not prove the package is vulnerability-free.", "Advisory coverage and version matching depend on upstream records and ecosystem metadata."])
+    summary = f"OSV returned {len(advisories)} usable vulnerability record(s) for the supplied package/version."
+    if malformed_records:
+        summary += f" Skipped {malformed_records} malformed record(s)."
+        status = "warning"
+    return make_report("OSV Vulnerability Lookup", target, status, summary, {"package": name, "version": release, "ecosystem": eco, "vulnerability_count": len(advisories), "malformed_record_count": malformed_records, "advisories": advisories, "source": OSV_ENDPOINT, "network_lookup_performed": True}, findings, ["Package name, version, and ecosystem were sent to the public OSV API because this query was explicitly requested.", "A positive result needs manual applicability review; an empty result does not prove the package is vulnerability-free.", "Advisory coverage and version matching depend on upstream records and ecosystem metadata."])
