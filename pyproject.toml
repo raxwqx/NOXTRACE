@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "noxtrace"
-version = "0.1.1"
+version = "5.0.0"
 description = "A modular, multi-engine defensive security workbench"
 readme = "README.md"
 requires-python = ">=3.10"
