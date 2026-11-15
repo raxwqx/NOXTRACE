@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.0.0 - 2026-11-15
+
+- Added `--fail-on-findings` for automation that needs a non-zero result when findings are present.
+- OSV checks now reject unsupported ecosystems and safely skip malformed advisory records.
+- Updated package and report version to 5.0.0.
+
+
 ## 0.1.1 - 2026-10-16
 
 - Reworked the main README as a detailed Turkish onboarding guide and kept the English guide in `README_EN.md`.
