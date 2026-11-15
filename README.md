@@ -480,3 +480,8 @@ NOXTRACE, [MIT lisansı](LICENSE) ile yayımlanır.
   <strong>NOXTRACE</strong><br />
   <sub>Ne kontrol edildiğini bil. Nelerin kontrol edilmediğini de bil. 🖤🔵</sub>
 </div>
+
+
+### Automation exit status
+
+Add `--fail-on-findings` to any report-producing command to return exit code 3 when it includes findings. Command errors return 2.
