@@ -484,4 +484,10 @@ NOXTRACE, [MIT lisansı](LICENSE) ile yayımlanır.
 
 ### Automation exit status
 
-Add `--fail-on-findings` to any report-producing command to return exit code 3 when it includes findings. Command errors return 2.
+Add `--fail-on-findings` to a report-producing command to return exit code `3` when it includes findings. Command errors return `2`; a completed report without findings returns `0`. For example:
+
+```bash
+noxtrace code-audit ./src --json --fail-on-findings
+```
+
+The OSV package lookup accepts the ecosystems listed by `noxtrace osv-check --help`. Unsupported ecosystems are rejected before a network request, and malformed advisory rows are skipped and counted in the report.

@@ -5,14 +5,15 @@ import io
 import json
 import tempfile
 import unittest
+from argparse import Namespace
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 import socket
 import threading
 
-from noxtrace.cli import build_parser
+from noxtrace.cli import build_parser, display_report
 from noxtrace.intro import load_intro_frames
 from noxtrace.modules.casenote import create_case_note
 from noxtrace.modules.codeaudit import audit_source
@@ -256,6 +257,27 @@ class CLIProtectionTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as error:
                 parser.parse_args(["osv-check", "demo", "1.0", "--ecosystem", "PyPI"])
         self.assertEqual(error.exception.code, 2)
+
+    def test_fail_on_findings_uses_documented_exit_code(self):
+        args = Namespace(output=None, html=None, json=True, fail_on_findings=True)
+        report = make_report("test", "local", "ok", {}, findings=[{"title": "review"}])
+        with redirect_stdout(io.StringIO()):
+            code = display_report(report, args)
+        self.assertEqual(code, 3)
+
+    def test_osv_rejects_unsupported_ecosystem_without_network(self):
+        with patch("urllib.request.urlopen") as open_url:
+            report = check_osv("demo-package", "1.0", "not-an-ecosystem")
+        self.assertEqual(report["status"], "error")
+        open_url.assert_not_called()
+
+    def test_osv_skips_malformed_advisory_rows(self):
+        payload = {"vulns": [None, {"id": "GHSA-TEST-1234", "summary": "Sample"}]}
+        with patch("urllib.request.urlopen", return_value=BytesIO(json.dumps(payload).encode())):
+            report = check_osv("demo-package", "1.2.3", "PyPI")
+        self.assertEqual(report["data"]["malformed_record_count"], 1)
+        self.assertEqual(report["data"]["vulnerability_count"], 1)
+        self.assertEqual(report["status"], "warning")
 
 
 class IntroTests(unittest.TestCase):

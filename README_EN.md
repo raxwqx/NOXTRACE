@@ -193,6 +193,9 @@ noxtrace osv-check requests 2.31.0 --ecosystem PyPI --online
 # Sends only the package name, version, and ecosystem to OSV.dev.
 # API details: https://google.github.io/osv.dev/post-v1-query/
 
+# Return exit code 3 when a source scan reports findings
+noxtrace code-audit ./src --json --fail-on-findings
+
 # Offline IP/domain/URL/hash-shaped indicator classification
 noxtrace ioc 8.8.8.8
 
@@ -216,6 +219,7 @@ noxtrace web-audit https://example.com --authorized --html reports/web-audit.htm
 ```
 
 Review reports before sharing. They can include target hostnames, local metadata, file paths, or text you supplied.
+`--fail-on-findings` returns `3` when a report contains findings; command errors return `2`. OSV ecosystems are validated before making a request, and malformed advisory entries are skipped and counted.
 
 ## 🧬 Polyglot engines
 

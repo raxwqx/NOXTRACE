@@ -19,6 +19,8 @@ def check_osv(package: str, version: str, ecosystem: str = "PyPI", timeout: floa
     target = f"{eco}:{name}@{release}"
     if not name or not release or not eco or len(name) > 200 or len(release) > 100:
         return make_report("OSV Vulnerability Lookup", target, "error", "Package, version, and ecosystem must be valid non-empty values.")
+    if eco not in SUPPORTED_ECOSYSTEMS:
+        return make_report("OSV Vulnerability Lookup", target, "error", f"Unsupported OSV ecosystem: {eco}.")
     payload = json.dumps({"package": {"name": name, "ecosystem": eco}, "version": release}).encode("utf-8")
     request = urllib.request.Request(OSV_ENDPOINT, data=payload, headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": f"NOXTRACE/{__version__}"}, method="POST")
     try:
