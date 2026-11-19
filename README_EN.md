@@ -47,6 +47,7 @@ The goal is not to promise that one tool can find every vulnerability. It is to 
 | 🔑 **Password Test-Value Audit** | Estimates length and character diversity locally without retaining or printing the supplied value. | None. Use a test phrase, never a reused real password. |
 | 🗒️ **Case Notes** | Structures analyst-authored observations for JSON/HTML export. | None. |
 | 📑 **Reporting** | Human-readable terminal output, JSON export and standalone styled HTML reports. | Local file output. |
+| ⚙️ **Automation exit status** | `--fail-on-findings` returns exit code `3` when a report contains findings; command errors return `2`. | None. |
 | 🧰 **Polyglot engines** | Optional Go TCP scanner, Rust classic-PCAP inventory, C system snapshot, Java Maven inventory, Bash lab readiness check. | Depends on selected engine; PCAP/system checks are local-only. |
 
 A missing header, open port, old dependency pattern, or syntax flag is **not automatically a confirmed vulnerability**. Results are review leads, not a substitute for expert validation.
@@ -202,6 +203,9 @@ noxtrace password-audit
 
 # A structured analyst note
 noxtrace case-note lab-01 'Expected test service was reachable'
+
+# Return exit code 3 when a report contains findings (useful in CI)
+noxtrace code-audit ./src --json --fail-on-findings
 ```
 
 ### JSON and HTML reports
@@ -216,6 +220,28 @@ noxtrace web-audit https://example.com --authorized --html reports/web-audit.htm
 ```
 
 Review reports before sharing. They can include target hostnames, local metadata, file paths, or text you supplied.
+
+### Automation exit codes
+
+Every report-producing command accepts `--fail-on-findings`:
+
+```bash
+noxtrace code-audit ./src --json --fail-on-findings
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Completed, no findings in the report. |
+| `2` | Command could not complete, or the report file could not be written. |
+| `3` | Completed, and the report contains at least one finding. |
+
+The flag works with `--json`, `--output`, and `--html`. Errors take precedence over findings, so a failed command returns `2` even when `--fail-on-findings` is set. A finding is still a review lead, not proof of a vulnerability. Reports are written atomically; an interrupted write cannot truncate an existing file.
+
+```bash
+if ! noxtrace code-audit ./src --json --fail-on-findings > review.json; then
+  echo "Review findings were reported; inspect review.json."
+fi
+```
 
 ## 🧬 Polyglot engines
 
@@ -256,7 +282,7 @@ cc -std=c11 -O2 -Wall -Wextra -Werror engines/c/system_audit.c -o /tmp/noxtrace-
 java engines/java/NoxtracePomAudit.java examples/pom-sample.xml
 ```
 
-GitHub Actions runs Python compilation and unit tests on the configured Python matrix. Rust code is dependency-free, but building the optional engine requires Rust/Cargo on the user's system.
+GitHub Actions runs Python compilation and unit tests on Ubuntu, Windows, and macOS across Python 3.10-3.13. Rust code is dependency-free, but building the optional engine requires Rust/Cargo on the user's system.
 
 ## 🔒 Security boundaries and privacy
 
@@ -266,6 +292,8 @@ GitHub Actions runs Python compilation and unit tests on the configured Python m
 - The web module sends a single `HEAD` request, does not follow redirects and does not inject payloads.
 - TLS validation uses the local trust store. Certificate failures are reported rather than silently bypassed.
 - DNS queries use the configured resolver. IP/domain/URL syntax checks and file hashes are local.
+- DNS names, domains, URLs, scan targets, TLS hosts, and OSV coordinates are rejected when they contain whitespace or terminal control characters.
+- JSON/HTML reports are written atomically; invalid report paths return a clear error instead of a traceback. Terminal output strips control sequences from untrusted values.
 - Log triage returns matching line numbers/rule names rather than full matching content.
 - Password audit accepts only a local test value and deliberately never stores/prints the supplied secret. Prefer a made-up phrase.
 - Remove tokens, passwords, private details, and sensitive file paths before sharing reports.

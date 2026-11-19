@@ -8,6 +8,8 @@ from noxtrace.reporting import make_report
 
 
 def analyze_ip(value: str, reverse_dns: bool = False) -> dict:
+    if not isinstance(value, str):
+        return make_report("IP Intelligence", str(value), "error", "Input is not a valid IPv4 or IPv6 address.")
     try:
         address = ipaddress.ip_address(value.strip())
     except ValueError:

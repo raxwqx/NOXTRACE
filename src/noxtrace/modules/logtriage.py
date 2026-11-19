@@ -16,12 +16,17 @@ _RULES = [
 
 
 def triage_log(path_value: str, max_lines: int = 200_000) -> dict:
-    path = Path(path_value).expanduser()
-    if not path.is_file():
-        return make_report("Log Triage", str(path), "error", "Log path is not a regular file.")
-    results = []
-    scanned = 0
+    if not isinstance(max_lines, int) or isinstance(max_lines, bool) or max_lines < 1:
+        return make_report("Log Triage", str(path_value), "error", "Line limit must be a positive integer.")
     try:
+        path = Path(path_value).expanduser()
+    except (OSError, RuntimeError, ValueError, TypeError) as exc:
+        return make_report("Log Triage", str(path_value), "error", f"Could not open the supplied path: {exc}")
+    try:
+        if not path.is_file():
+            return make_report("Log Triage", str(path), "error", "Log path is not a regular file.")
+        results = []
+        scanned = 0
         with path.open("r", encoding="utf-8", errors="replace") as stream:
             for line_number, line in enumerate(stream, 1):
                 if line_number > max_lines:
@@ -31,7 +36,7 @@ def triage_log(path_value: str, max_lines: int = 200_000) -> dict:
                     if pattern.search(line):
                         results.append({"line": line_number, "rule": rule_id, "title": label})
                         break
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         return make_report("Log Triage", str(path), "error", f"Could not read log: {exc}")
     findings = [{"severity": "REVIEW", "title": item["title"], "detail": f"Rule {item['rule']} matched at line {item['line']}."} for item in results[:1000]]
     status = "warning" if results else "ok"

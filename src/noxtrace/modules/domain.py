@@ -6,10 +6,20 @@ import re
 from noxtrace.reporting import make_report
 
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
+_CONTROL = re.compile(r"[\x00-\x20\x7f-\x9f]")
 
 
 def analyze_domain(value: str) -> dict:
-    original = value.strip().rstrip(".")
+    raw = value.strip() if isinstance(value, str) else ""
+    if not raw:
+        return make_report("Domain Validation", "", "error", "Enter a domain or hostname.")
+    if _CONTROL.search(raw):
+        return make_report("Domain Validation", raw, "error", "Hostname must not contain whitespace or control characters.")
+    original = raw[:-1] if raw.endswith(".") else raw
+    if not original:
+        return make_report("Domain Validation", raw, "error", "Enter a domain or hostname.")
+    if original.endswith("."):
+        return make_report("Domain Validation", raw, "error", "Hostname must not end with multiple dots.")
     try:
         address = ipaddress.ip_address(original)
     except ValueError:

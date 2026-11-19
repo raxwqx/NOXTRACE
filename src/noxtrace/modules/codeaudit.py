@@ -39,13 +39,19 @@ def _source_files(root: Path, max_files: int):
 
 
 def audit_source(path_value: str, max_files: int = 5000, max_file_bytes: int = 2_000_000) -> dict:
-    root = Path(path_value).expanduser().resolve()
-    if max_files < 1 or max_file_bytes < 1:
+    try:
+        root = Path(path_value).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError, TypeError) as exc:
+        return make_report("Source Code Audit", str(path_value), "error", f"Could not open the supplied path: {exc}")
+    if not isinstance(max_files, int) or not isinstance(max_file_bytes, int) or max_files < 1 or max_file_bytes < 1:
         return make_report("Source Code Audit", str(root), "error", "File and byte limits must be positive integers.")
-    if not root.exists():
-        return make_report("Source Code Audit", str(root), "error", "Path does not exist.")
-    if not root.is_file() and not root.is_dir():
-        return make_report("Source Code Audit", str(root), "error", "Path must be a source file or directory.")
+    try:
+        if not root.exists():
+            return make_report("Source Code Audit", str(root), "error", "Path does not exist.")
+        if not root.is_file() and not root.is_dir():
+            return make_report("Source Code Audit", str(root), "error", "Path must be a source file or directory.")
+    except (OSError, ValueError) as exc:
+        return make_report("Source Code Audit", str(root), "error", f"Could not inspect the supplied path: {exc}")
     files = _source_files(root, max_files)
     if len(files) > max_files:
         return make_report("Source Code Audit", str(root), "error", f"Source file count exceeds the safety cap of {max_files}.")

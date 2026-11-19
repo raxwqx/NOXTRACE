@@ -15,3 +15,5 @@ Do not publish a sensitive exploit or real private target data in a public issue
 ## Data handling
 
 NOXTRACE has no telemetry or central report upload. Network behavior is limited to the selected module. Review the module description and generated report; DNS queries use the machine's configured resolver, the web audit sends one `HEAD` request, TLS inspection establishes a handshake, and TCP scanning attempts connections to the specified ports.
+
+Inputs that contain terminal control characters are rejected for DNS, domain, URL, scan, TLS, and OSV operations. JSON and HTML reports are written atomically and invalid report paths produce an error instead of a traceback. Human-readable output strips control sequences from untrusted values. Reports may still contain sensitive target data and analyst notes; review them before sharing.

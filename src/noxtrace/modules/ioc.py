@@ -13,6 +13,8 @@ _HEX = re.compile(r"^[a-fA-F0-9]+$")
 
 
 def classify_ioc(value: str) -> dict:
+    if not isinstance(value, str):
+        return make_report("IOC Classifier", str(value), "error", "Enter an indicator to classify.")
     item = value.strip()
     if not item:
         return make_report("IOC Classifier", item, "error", "Enter an indicator to classify.")
