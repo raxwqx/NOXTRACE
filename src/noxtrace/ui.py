@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from typing import Any
 
 from noxtrace import __version__
+
+_ANSI_SEQUENCE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_TERMINAL_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 
 class Palette:
@@ -20,6 +24,13 @@ class Palette:
 
 
 P = Palette()
+
+
+def _safe_text(value: Any) -> str:
+    """Render untrusted report text without terminal escape sequences."""
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    text = _ANSI_SEQUENCE.sub("", text)
+    return _TERMINAL_CONTROL.sub("\uFFFD", text)
 
 
 def banner() -> None:
@@ -44,27 +55,31 @@ def banner() -> None:
 
 
 def print_report(report: dict[str, Any]) -> None:
-    status = str(report.get("status", "unknown")).upper()
+    status = _safe_text(report.get("status", "unknown")).upper()
     color = P.blue if status in {"OK", "WARNING"} else P.white
-    print(f"\n{P.blue}{P.bold}[ {report.get('module', 'REPORT').upper()} ]{P.reset}")
+    print(f"\n{P.blue}{P.bold}[ {_safe_text(report.get('module', 'REPORT')).upper()} ]{P.reset}")
     print(f"{P.gray}{'-' * 62}{P.reset}")
-    print(f"  Target  : {report.get('target', '-')}")
+    print(f"  Target  : {_safe_text(report.get('target', '-'))}")
     print(f"  Status  : {color}{status}{P.reset}")
-    print(f"  Summary : {report.get('summary', '-')}")
+    print(f"  Summary : {_safe_text(report.get('summary', '-'))}")
     findings = report.get("findings") or []
     for item in findings:
-        severity = str(item.get("severity", "INFO")).upper()
-        label = item.get("title", item.get("check", "Finding"))
-        detail = item.get("detail", item.get("evidence", ""))
+        if not isinstance(item, dict):
+            print(f"  [{P.white}REVIEW{P.reset}] {_safe_text(item)}")
+            continue
+        severity = _safe_text(item.get("severity", "INFO")).upper()
+        label = _safe_text(item.get("title", item.get("check", "Finding")))
+        detail = _safe_text(item.get("detail", item.get("evidence", "")))
         print(f"  [{severity:<8}] {label}: {detail}")
     data = report.get("data") or {}
-    for key, value in data.items():
-        if isinstance(value, (dict, list)):
-            value = str(value)
-        print(f"  {key.replace('_', ' ').capitalize():<22}: {value}")
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, (dict, list)):
+                value = str(value)
+            print(f"  {_safe_text(key).replace('_', ' ').capitalize():<22}: {_safe_text(value)}")
     for note in report.get("notes") or []:
-        print(f"  {P.gray}Note: {note}{P.reset}")
-    print(f"  {P.gray}UTC: {report.get('timestamp_utc', '-')}{P.reset}\n")
+        print(f"  {P.gray}Note: {_safe_text(note)}{P.reset}")
+    print(f"  {P.gray}UTC: {_safe_text(report.get('timestamp_utc', '-'))}{P.reset}\n")
 
 
 def prompt_authorization() -> bool:

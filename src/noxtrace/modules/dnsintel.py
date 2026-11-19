@@ -2,21 +2,41 @@
 
 from __future__ import annotations
 
+import ipaddress
+import re
 import socket
 from noxtrace.reporting import make_report
 
 SUPPORTED = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "PTR"}
+_CONTROL = re.compile(r"[\x00-\x20\x7f-\x9f]")
+
+
+def _normalize_hostname(name: str) -> str:
+    """Accept exactly one terminal dot and reject malformed input."""
+    raw = name.strip() if isinstance(name, str) else ""
+    if raw.endswith("."):
+        raw = raw[:-1]
+    if not raw:
+        raise ValueError("Enter a valid hostname or IP address.")
+    if raw.endswith("."):
+        raise ValueError("Hostname must not end with multiple dots.")
+    if len(raw) > 253:
+        raise ValueError("Hostname is longer than 253 characters.")
+    if _CONTROL.search(raw):
+        raise ValueError("Hostname must not contain whitespace or control characters.")
+    return raw
 
 
 def analyze_dns(name: str, record_types: list[str] | None = None) -> dict:
-    hostname = name.strip().rstrip(".")
-    if not hostname or any(ch.isspace() for ch in hostname):
-        return make_report("DNS Intelligence", name, "error", "Enter a valid hostname or IP address.")
-    requested = [item.upper() for item in (record_types or ["A", "AAAA", "MX", "NS", "TXT"]) ]
+    try:
+        hostname = _normalize_hostname(name)
+    except (TypeError, ValueError) as exc:
+        return make_report("DNS Intelligence", str(name), "error", str(exc))
+    requested = [item.upper() for item in (record_types or ["A", "AAAA", "MX", "NS", "TXT"])]
     invalid = sorted(set(requested) - SUPPORTED)
     if invalid:
         return make_report("DNS Intelligence", hostname, "error", f"Unsupported record type(s): {', '.join(invalid)}", notes=[f"Supported types: {', '.join(sorted(SUPPORTED))}"])
-    data: dict[str, list[str] | str | None] = {}
+    data: dict[str, list[str] | None] = {}
     notes: list[str] = []
     if any(x in requested for x in ("A", "AAAA")):
         for kind, family in (("A", socket.AF_INET), ("AAAA", socket.AF_INET6)):
@@ -25,14 +45,21 @@ def analyze_dns(name: str, record_types: list[str] | None = None) -> dict:
             try:
                 answers = sorted({item[4][0] for item in socket.getaddrinfo(hostname, None, family, socket.SOCK_STREAM)})
                 data[kind] = answers
-            except socket.gaierror as exc:
+            except (OSError, UnicodeError) as exc:
                 data[kind] = []
                 notes.append(f"{kind} lookup: {exc}")
     if "PTR" in requested:
         try:
-            data["PTR"] = [socket.gethostbyaddr(hostname)[0]]
-        except (OSError, socket.herror, socket.gaierror):
-            data["PTR"] = []
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            data["PTR"] = None
+            notes.append("PTR lookup requires an IP address; supply an IP literal instead of a hostname.")
+        else:
+            try:
+                data["PTR"] = [socket.gethostbyaddr(hostname)[0]]
+            except OSError:
+                data["PTR"] = []
+                notes.append("No PTR name was returned by the configured resolver.")
     special = [x for x in requested if x in {"MX", "NS", "TXT", "CNAME"}]
     if special:
         try:

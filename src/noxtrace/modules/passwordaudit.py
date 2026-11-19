@@ -7,7 +7,7 @@ from noxtrace.reporting import make_report
 
 
 def audit_password(value: str) -> dict:
-    if not value:
+    if not isinstance(value, str) or not value:
         return make_report("Password Audit", "provided value (redacted)", "error", "Enter a non-empty test value.")
     pool = 0
     groups = {"lowercase": any(c in string.ascii_lowercase for c in value), "uppercase": any(c in string.ascii_uppercase for c in value), "digits": any(c in string.digits for c in value), "symbols": any(c in string.punctuation or c.isspace() for c in value)}

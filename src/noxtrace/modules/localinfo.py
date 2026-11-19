@@ -1,11 +1,21 @@
 """Local-only runtime and host information. No external service is contacted."""
 
 from __future__ import annotations
+import ipaddress
 import os
 import platform
 import socket
 import sys
 from noxtrace.reporting import make_report
+
+
+def _address_sort_key(value: str) -> tuple[int, int, str]:
+    """Sort IPv4 before IPv6 and numerically inside each family."""
+    try:
+        address = ipaddress.ip_address(value.split("%", 1)[0])
+    except ValueError:
+        return (99, 0, value)
+    return (address.version, int(address), "")
 
 
 def collect_local_info() -> dict:
@@ -22,6 +32,6 @@ def _hostname_addresses() -> list[str]:
     if not hostname:
         return []
     try:
-        return sorted({item[4][0] for item in socket.getaddrinfo(hostname, None)})
-    except socket.gaierror:
+        return sorted({item[4][0] for item in socket.getaddrinfo(hostname, None)}, key=_address_sort_key)
+    except (OSError, UnicodeError):
         return []

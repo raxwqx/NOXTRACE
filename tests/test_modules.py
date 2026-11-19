@@ -8,11 +8,11 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 import socket
 import threading
 
-from noxtrace.cli import build_parser
+from noxtrace.cli import build_parser, main
 from noxtrace.intro import load_intro_frames
 from noxtrace.modules.casenote import create_case_note
 from noxtrace.modules.codeaudit import audit_source
@@ -21,14 +21,17 @@ from noxtrace.modules.domain import analyze_domain
 from noxtrace.modules.filehash import analyze_file
 from noxtrace.modules.ioc import classify_ioc
 from noxtrace.modules.ipintel import analyze_ip
+from noxtrace.modules.localinfo import collect_local_info
 from noxtrace.modules.logtriage import triage_log
 from noxtrace.modules.passwordaudit import audit_password
 from noxtrace.modules.pomaudit import audit_pom
 from noxtrace.modules.osvcheck import check_osv
 from noxtrace.modules.portscan import DEFAULT_PORTS, MAX_PORTS, parse_ports, scan_tcp
+from noxtrace.modules.tlscheck import inspect_tls
 from noxtrace.modules.urlintel import analyze_url
 from noxtrace.modules.webaudit import audit_url
-from noxtrace.reporting import make_report, json_text, write_html, write_json
+from noxtrace.reporting import ReportWriteError, make_report, json_text, write_html, write_json
+from noxtrace.ui import print_report
 
 
 class IPTests(unittest.TestCase):
@@ -268,6 +271,273 @@ class IntroTests(unittest.TestCase):
         args = build_parser().parse_args(["--no-intro"])
         self.assertTrue(args.no_intro)
         self.assertIsNone(args.command)
+
+class NormalizationTests(unittest.TestCase):
+    def test_domain_allows_exactly_one_trailing_dot(self):
+        self.assertTrue(analyze_domain("example.com.")["data"]["syntax_valid"])
+        for value in ("example.com..", "example.com...", "."):
+            with self.subTest(value=value):
+                self.assertEqual(analyze_domain(value)["status"], "error")
+
+    def test_dns_rejects_multiple_trailing_dots_before_lookup(self):
+        with patch("noxtrace.modules.dnsintel.socket.getaddrinfo") as resolver:
+            report = analyze_dns("example.com..", ["A"])
+        self.assertEqual(report["status"], "error")
+        resolver.assert_not_called()
+
+    def test_dns_single_trailing_dot_is_normalized(self):
+        fake = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("203.0.113.10", 0))]
+        with patch("noxtrace.modules.dnsintel.socket.getaddrinfo", return_value=fake):
+            report = analyze_dns("example.com.", ["A"])
+        self.assertEqual(report["target"], "example.com")
+
+    def test_dns_rejects_control_characters_before_lookup(self):
+        with patch("noxtrace.modules.dnsintel.socket.getaddrinfo") as resolver:
+            report = analyze_dns("example.com\x1b[31m", ["A"])
+        self.assertEqual(report["status"], "error")
+        resolver.assert_not_called()
+
+    def test_dns_ptr_on_hostname_explains_requirement(self):
+        report = analyze_dns("example.com", ["PTR"])
+        self.assertIsNone(report["data"]["PTR"])
+        self.assertIn("requires an IP address", " ".join(report["notes"]))
+
+    def test_dns_ptr_resolver_failure_is_handled(self):
+        with patch("noxtrace.modules.dnsintel.socket.gethostbyaddr", side_effect=socket.herror("nope")):
+            report = analyze_dns("192.0.2.1", ["PTR"])
+        self.assertEqual(report["data"]["PTR"], [])
+
+    def test_dns_resolver_error_is_reported(self):
+        with patch("noxtrace.modules.dnsintel.socket.getaddrinfo", side_effect=socket.gaierror("temporary failure")):
+            report = analyze_dns("example.com", ["A"])
+        self.assertEqual(report["data"]["A"], [])
+        self.assertTrue(any("A lookup" in note for note in report["notes"]))
+
+
+class PathHardeningTests(unittest.TestCase):
+    def test_unresolvable_home_expansion_returns_error(self):
+        with patch.object(Path, "expanduser", side_effect=RuntimeError("no home directory")):
+            reports = [
+                analyze_file("~/sample.bin"),
+                triage_log("~/sample.log"),
+                audit_pom("~/pom.xml"),
+                audit_source("~/src"),
+            ]
+        for report in reports:
+            self.assertEqual(report["status"], "error")
+
+    def test_embedded_nul_returns_error(self):
+        self.assertEqual(analyze_file("bad\x00path")["status"], "error")
+        self.assertEqual(triage_log("bad\x00path")["status"], "error")
+        self.assertEqual(audit_pom("bad\x00path")["status"], "error")
+        self.assertEqual(audit_source("bad\x00path")["status"], "error")
+
+    def test_log_rejects_non_positive_max_lines(self):
+        for value in (0, -1, "10"):
+            with self.subTest(value=value):
+                self.assertEqual(triage_log("README.md", value)["status"], "error")
+
+    def test_pom_size_cap_is_enforced(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "pom.xml"
+            path.write_text("<project/>", encoding="utf-8")
+            with patch("noxtrace.modules.pomaudit.MAX_POM_BYTES", 4):
+                report = audit_pom(str(path))
+        self.assertEqual(report["status"], "error")
+        self.assertIn("safety cap", report["summary"])
+
+
+class URLAndWebHardeningTests(unittest.TestCase):
+    def test_url_rejects_control_and_whitespace(self):
+        for value in ("https://example.com/\x1b[31m", "https://example.com/a b", "https://example.com/\x00"):
+            with self.subTest(value=value):
+                self.assertEqual(analyze_url(value)["status"], "error")
+
+    def test_url_normalizes_hostname(self):
+        self.assertEqual(analyze_url("https://example.com./x")["target"], "https://example.com/x")
+        idn = analyze_url("https://bücher.example/x")
+        self.assertEqual(idn["data"]["hostname"], "xn--bcher-kva.example")
+        self.assertEqual(idn["target"], "https://xn--bcher-kva.example/x")
+
+    def test_url_flags_malformed_percent_escape(self):
+        report = analyze_url("https://example.com/%zz")
+        self.assertTrue(any("percent" in item["title"].lower() for item in report["findings"]))
+
+    def test_clean_url_has_no_findings(self):
+        self.assertEqual(analyze_url("https://example.com/")["findings"], [])
+
+    def test_web_audit_rejects_controls_before_request(self):
+        with patch("urllib.request.build_opener") as build:
+            report = audit_url("https://example.com/\x1b[31m")
+        self.assertEqual(report["status"], "error")
+        build.assert_not_called()
+
+
+class TLSHardeningTests(unittest.TestCase):
+    def test_invalid_host_and_port_are_rejected(self):
+        self.assertEqual(inspect_tls("bad host")["status"], "error")
+        self.assertEqual(inspect_tls("")["status"], "error")
+        self.assertEqual(inspect_tls("example.com", 0)["status"], "error")
+
+    def test_missing_peer_certificate_is_reported(self):
+        class Secured:
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return False
+            def getpeercert(self):
+                return None
+            def version(self):
+                return "TLSv1.3"
+            def cipher(self):
+                return ("TLS_AES_128_GCM_SHA256", "TLSv1.3", 128)
+            def selected_alpn_protocol(self):
+                return None
+        class Context:
+            def wrap_socket(self, raw, server_hostname):
+                return Secured()
+        class Raw:
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return False
+        with patch("noxtrace.modules.tlscheck.socket.create_connection", return_value=Raw()), patch(
+            "noxtrace.modules.tlscheck.ssl.create_default_context", return_value=Context()
+        ):
+            report = inspect_tls("example.com")
+        self.assertEqual(report["status"], "warning")
+        self.assertTrue(any("No peer certificate" in item["title"] for item in report["findings"]))
+
+
+class OsvHardeningTests(unittest.TestCase):
+    def test_unsupported_ecosystem_rejected_before_network(self):
+        with patch("urllib.request.urlopen") as open_url:
+            report = check_osv("demo", "1.0", "NotAnEcosystem")
+        self.assertEqual(report["status"], "error")
+        open_url.assert_not_called()
+
+    def test_malformed_rows_are_skipped_and_counted(self):
+        payload = {"vulns": [None, {"id": "GHSA-X", "aliases": "not-a-list", "severity": "not-a-list"}]}
+        with patch("urllib.request.urlopen", return_value=BytesIO(json.dumps(payload).encode())):
+            report = check_osv("demo", "1.0", "PyPI")
+        self.assertEqual(report["data"]["malformed_records"], 1)
+        self.assertEqual(report["data"]["parsed_advisories"], 1)
+        self.assertEqual(report["data"]["advisories"][0]["aliases"], [])
+        self.assertEqual(report["data"]["advisories"][0]["severity_scores"], [])
+
+    def test_control_characters_rejected_before_network(self):
+        with patch("urllib.request.urlopen") as open_url:
+            report = check_osv("demo\x1b[31m", "1.0", "PyPI")
+        self.assertEqual(report["status"], "error")
+        open_url.assert_not_called()
+
+
+class CaseNoteHardeningTests(unittest.TestCase):
+    def test_control_characters_rejected(self):
+        self.assertEqual(create_case_note("case\x1b[31m", "observation")["status"], "error")
+        self.assertEqual(create_case_note("case", "observation\x00")["status"], "error")
+        self.assertEqual(create_case_note("case", "line one\nline two")["status"], "ok")
+
+    def test_size_limits(self):
+        self.assertEqual(create_case_note("x" * 121, "observation")["status"], "error")
+        self.assertEqual(create_case_note("case", "x" * 10001)["status"], "error")
+
+
+class LocalInfoTests(unittest.TestCase):
+    def test_addresses_sorted_numerically_and_by_family(self):
+        answers = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.10", 0)),
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.2", 0)),
+        ]
+        with patch("noxtrace.modules.localinfo.platform.node", return_value="test-host"), patch(
+            "noxtrace.modules.localinfo.socket.getaddrinfo", return_value=answers
+        ):
+            report = collect_local_info()
+        self.assertEqual(report["data"]["resolver_addresses_for_hostname"], ["10.0.0.2", "10.0.0.10", "::1"])
+
+
+class PortScanHardeningTests(unittest.TestCase):
+    def test_target_control_characters_rejected_before_resolver(self):
+        with patch("noxtrace.modules.portscan.socket.getaddrinfo") as resolver:
+            report = scan_tcp("bad\x1b[31m", [80])
+        self.assertEqual(report["status"], "error")
+        resolver.assert_not_called()
+
+    def test_resolved_addresses_are_sorted_numerically(self):
+        answers = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.10", 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.2", 0)),
+        ]
+        class ClosedSocket:
+            def settimeout(self, value):
+                pass
+            def connect_ex(self, address):
+                return 1
+            def close(self):
+                pass
+        with patch("noxtrace.modules.portscan.socket.getaddrinfo", return_value=answers), patch(
+            "noxtrace.modules.portscan.socket.socket", return_value=ClosedSocket()
+        ):
+            report = scan_tcp("example.test", [80], timeout=0.1)
+        self.assertEqual(report["data"]["resolved_addresses"], ["10.0.0.2", "10.0.0.10"])
+
+    def test_parse_ports_reports_clear_error(self):
+        with self.assertRaisesRegex(ValueError, "Invalid port value"):
+            parse_ports("bad")
+
+
+class ExitCodeAndReportingTests(unittest.TestCase):
+    def _run(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_fail_on_findings_uses_exit_code_three(self):
+        code, output, _ = self._run(["url", "http://example.com/", "--json", "--fail-on-findings"])
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(output)["status"], "warning")
+        code, _, _ = self._run(["url", "http://example.com/", "--json"])
+        self.assertEqual(code, 0)
+
+    def test_clean_report_with_flag_returns_zero(self):
+        code, _, _ = self._run(["url", "https://example.com/", "--json", "--fail-on-findings"])
+        self.assertEqual(code, 0)
+
+    def test_errors_take_precedence_over_findings(self):
+        code, _, _ = self._run(["url", "javascript:alert(1)", "--json", "--fail-on-findings"])
+        self.assertEqual(code, 2)
+
+    def test_scan_parse_error_report_has_full_envelope(self):
+        code, output, _ = self._run(["scan", "127.0.0.1", "--ports", "bad", "--authorized", "--json"])
+        payload = json.loads(output)
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["tool"], "NOXTRACE")
+        self.assertEqual(payload["module"], "TCP Port Scan")
+        self.assertIn("timestamp_utc", payload)
+        self.assertIn("version", payload)
+
+    def test_report_write_failure_returns_two(self):
+        code, _, err = self._run(["url", "https://example.com/", "--output", "bad\x00path.json", "--json"])
+        self.assertEqual(code, 2)
+        self.assertIn("could not write report", err)
+
+    def test_console_output_strips_terminal_sequences(self):
+        report = make_report("mod\x1b[31m", "bad\x1b[31mtarget", "ok", "summary", {"value": "v\x1b[31m"}, [{"severity": "LOW", "title": "t\x1b[31m", "detail": "d\x1b[31m"}], ["n\x1b[31m"])
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            print_report(report)
+        output = buffer.getvalue()
+        self.assertNotIn("\x1b", output)
+        self.assertIn("target", output)
+
+    def test_write_helpers_raise_report_write_error(self):
+        with self.assertRaises(ReportWriteError):
+            write_json(make_report("unit", "x", "ok", "y"), "bad\x00path.json")
+        with self.assertRaises(ReportWriteError):
+            write_html(make_report("unit", "x", "ok", "y"), "bad\x00path.json")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,7 +28,7 @@ from noxtrace.modules.portscan import parse_ports, scan_tcp
 from noxtrace.modules.tlscheck import inspect_tls
 from noxtrace.modules.urlintel import analyze_url
 from noxtrace.modules.webaudit import audit_url
-from noxtrace.reporting import json_text, write_html, write_json
+from noxtrace.reporting import ReportWriteError, json_text, make_report, write_html, write_json
 from noxtrace.ui import P, banner, print_report, prompt_authorization
 
 
@@ -43,6 +43,7 @@ def add_report_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="print result as JSON")
     parser.add_argument("--output", metavar="PATH", help="save a JSON copy to PATH")
     parser.add_argument("--html", metavar="PATH", help="save a self-contained HTML report to PATH")
+    parser.add_argument("--fail-on-findings", action="store_true", help="return exit code 3 when the report contains findings")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -123,17 +124,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def display_report(report: dict, args: argparse.Namespace) -> int:
-    if getattr(args, "output", None):
-        path = write_json(report, args.output)
-        print(f"JSON saved to {path}", file=sys.stderr if getattr(args, "json", False) else sys.stdout)
-    if getattr(args, "html", None):
-        path = write_html(report, args.html)
-        print(f"HTML saved to {path}", file=sys.stderr if getattr(args, "json", False) else sys.stdout)
+    try:
+        if getattr(args, "output", None):
+            path = write_json(report, args.output)
+            print(f"JSON saved to {path}", file=sys.stderr if getattr(args, "json", False) else sys.stdout)
+        if getattr(args, "html", None):
+            path = write_html(report, args.html)
+            print(f"HTML saved to {path}", file=sys.stderr if getattr(args, "json", False) else sys.stdout)
+    except ReportWriteError as exc:
+        print(f"NOXTRACE: {exc}", file=sys.stderr)
+        return 2
     if getattr(args, "json", False):
         print(json_text(report))
     else:
         print_report(report)
-    return 2 if report.get("status") == "error" else 0
+    if report.get("status") == "error":
+        return 2
+    if getattr(args, "fail_on_findings", False) and report.get("findings"):
+        return 3
+    return 0
 
 
 def engine_status() -> dict:
@@ -257,7 +266,9 @@ def _interactive() -> int:
                 print("  Choose one of the listed numbers.\n"); continue
             print_report(report)
             destination = input("  Save JSON path (Enter to skip): ").strip()
-            if destination: print(f"  Saved: {write_json(report, destination)}\n")
+            if destination:
+                try: print(f"  Saved: {write_json(report, destination)}\n")
+                except ReportWriteError as exc: print(f"  Could not save report: {exc}\n")
         except (EOFError, KeyboardInterrupt):
             print("\n  Exiting NOXTRACE.\n"); return 0
         except (ValueError, OSError) as exc:
@@ -290,7 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "url": report = analyze_url(args.url)
     elif args.command == "scan":
         try: ports = parse_ports(args.ports)
-        except ValueError as exc: report = {"module": "TCP Port Scan", "target": args.target, "status": "error", "summary": str(exc), "data": {}, "findings": [], "notes": []}
+        except ValueError as exc: report = make_report("TCP Port Scan", args.target, "error", str(exc), notes=["Port specification could not be parsed; no network connection was attempted."])
         else: report = scan_tcp(args.target, ports, args.timeout)
     elif args.command == "web-audit": report = audit_url(args.url, args.timeout)
     elif args.command == "tls": report = inspect_tls(args.host, args.port, args.timeout)

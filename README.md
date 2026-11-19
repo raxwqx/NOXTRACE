@@ -67,6 +67,7 @@ Program açılırken terminalde ayrı bir açılış animasyonu oynar. README'de
 | **IOC Classifier** | IP, domain, URL veya hash benzeri girdiyi çevrimdışı biçim olarak sınıflandırır. | Hayır; itibar servisine başvurmaz. |
 | **Password Test Audit** | Yerel bir test ifadesinin uzunluk ve karakter çeşitliliğini tahmin eder; girilen değeri rapora koymaz. | Hayır. Gerçek veya tekrar kullanılan parolanı girme. |
 | **Case Notes & Reports** | Araştırmacı notlarını yapılandırır; terminal, JSON ve bağımsız HTML raporu üretir. | Rapor dosyaları yerel olarak yazılır. |
+| **Otomasyon Çıkış Durumu** | `--fail-on-findings` ile bulgu içeren raporlarda `3`, komut hatasında `2`, bulgusuz tamamlanan raporda `0` çıkış kodu döner. | Hayır. |
 | **Polyglot Engines** | Go TCP taraması, Rust klasik-PCAP envanteri, C sistem özeti, Java Maven envanteri ve Bash laboratuvar kontrolü. | Seçilen motora bağlıdır; bazıları tamamen yereldir. |
 
 **Önemli:** Eksik bir HTTP başlığı, açık bir port veya kodda eşleşen bir örüntü tek başına doğrulanmış bir güvenlik açığı değildir. Sonuçlar, insan tarafından incelenmesi gereken ipuçlarıdır. Hiçbir araç bütün güvenlik açıklarını bulmayı garanti edemez.
@@ -320,6 +321,9 @@ noxtrace password-audit
 
 # Araştırma gözlemini düzenli bir rapora dönüştür
 noxtrace case-note lab-01 'Test servisi beklenen sonucu verdi'
+
+# Bulgu varsa çıkış kodu 3 döndür (CI/otomasyon için)
+noxtrace code-audit ./src --json --fail-on-findings
 ```
 
 Parola denetiminde değer girerken terminalde gizli giriş istemi görünür. Yine de **gerçek veya başka yerde kullandığın parolayı yazma**. Bu kontrol parola kırmaz, parola listesi denemez ve değeri raporda saklamaz.
@@ -342,6 +346,28 @@ noxtrace web-audit https://YOUR-LAB-HOST --authorized --html reports/web-audit.h
 ```
 
 Raporları paylaşmadan önce gözden geçir. Hedef adresi, dosya yolu veya kendi girdiğin araştırma notları gibi bilgiler içerebilirler. `reports/` klasörünü ve rapor dosyalarını paylaşma kararı sana aittir.
+
+### Otomasyon çıkış kodları
+
+Rapor üreten tüm komutlar `--fail-on-findings` seçeneğini kabul eder:
+
+```bash
+noxtrace code-audit ./src --json --fail-on-findings
+```
+
+| Çıkış kodu | Anlamı |
+| --- | --- |
+| `0` | Komut tamamlandı ve raporda bulgu yok. |
+| `2` | Komut tamamlanamadı veya rapor dosyası yazılamadı. |
+| `3` | Komut tamamlandı ve raporda en az bir bulgu var. |
+
+Bu seçenek `--json`, `--output` ve `--html` ile birlikte çalışır. Hata durumu bulgudan önce gelir; bu nedenle komut başarısız olduğunda `--fail-on-findings` verilse bile çıkış kodu `2` olur. Bulgu, doğrulanmış bir güvenlik açığı değil; insan incelemesi gerektiren bir ipucudur. Raporlar atomik yazılır; kesilen bir yazma işlemi mevcut dosyayı bozamaz.
+
+```bash
+if ! noxtrace code-audit ./src --json --fail-on-findings > review.json; then
+  echo "İncelenecek bulgular raporlandı; review.json dosyasına bak."
+fi
+```
 
 ## 🧬 Çok dilli motorlar (Python, Go, Rust, C, Java, Bash)
 
@@ -379,7 +405,7 @@ Bu betik Python derleme kontrolünü ve birim testlerini çalıştırır; kurulu
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-GitHub Actions yapılandırması Python testlerini ve polyglot motorlarının temel kontrollerini otomatik çalıştırmak üzere `/.github/workflows/tests.yml` altında bulunur.
+GitHub Actions yapılandırması Python testlerini Ubuntu, Windows ve macOS üzerinde Python 3.10-3.13 sürümleriyle; polyglot motorlarının temel kontrollerini ise ayrı işlerde otomatik çalıştırmak üzere `/.github/workflows/tests.yml` altında bulunur.
 
 ## 🗂️ Proje yapısı
 
@@ -459,6 +485,8 @@ Dar terminal penceresi, `NO_COLOR` değişkeni veya `TERM=dumb` gibi ortam ayarl
 - Port taraması üst sınırları ve işçi sayısı ile sınırlandırılmıştır.
 - Web denetimi tek bir `HEAD` isteği gönderir; yönlendirme izlemez ve saldırı yükü eklemez.
 - DNS sorguları yapılandırılmış sistem çözümleyicisini kullanır.
+- DNS adları, domainler, URL'ler, tarama hedefleri, TLS hostları ve OSV koordinatları boşluk veya terminal kontrol karakteri içerdiğinde reddedilir.
+- JSON/HTML raporları atomik yazılır; geçersiz rapor yolları traceback yerine anlaşılır hata verir. Terminal çıktısı güvenilmeyen değerlerdeki kontrol dizilerini temizler.
 - Dosya hash'leri ve kaynak kodu incelemesi yerel çalışır; dosyalar yüklenmez.
 - OSV sorgusu yalnızca açıkça `--online` verildiğinde seçilen paket koordinatlarını OSV.dev'e gönderir.
 - Parola denetimini yalnızca uydurma/test değeriyle kullan.

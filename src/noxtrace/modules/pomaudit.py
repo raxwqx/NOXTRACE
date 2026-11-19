@@ -5,14 +5,21 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from noxtrace.reporting import make_report
 
+MAX_POM_BYTES = 5_000_000
+
 
 def audit_pom(path_value: str) -> dict:
-    path = Path(path_value).expanduser()
-    if not path.is_file():
-        return make_report("Java Dependency Review", str(path), "error", "pom.xml path is not a regular file.")
     try:
+        path = Path(path_value).expanduser()
+    except (OSError, RuntimeError, ValueError, TypeError) as exc:
+        return make_report("Java Dependency Review", str(path_value), "error", f"Could not open the supplied path: {exc}")
+    try:
+        if not path.is_file():
+            return make_report("Java Dependency Review", str(path), "error", "pom.xml path is not a regular file.")
+        if path.stat().st_size > MAX_POM_BYTES:
+            return make_report("Java Dependency Review", str(path), "error", f"pom.xml exceeds the {MAX_POM_BYTES} byte safety cap.")
         root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError) as exc:
+    except (ET.ParseError, OSError, ValueError) as exc:
         return make_report("Java Dependency Review", str(path), "error", f"Could not parse XML: {exc}")
 
     def child_text(element, name: str) -> str | None:

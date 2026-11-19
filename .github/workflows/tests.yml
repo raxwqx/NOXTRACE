@@ -3,14 +3,19 @@ name: tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   python-tests:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -24,6 +29,10 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
+      - name: Verify CLI entry point
+        env:
+          PYTHONPATH: src
+        run: python -m noxtrace --version
 
   polyglot-smoke:
     runs-on: ubuntu-latest
@@ -43,7 +52,6 @@ jobs:
         run: cc -std=c11 -O2 -Wall -Wextra -Werror engines/c/system_audit.c -o /tmp/noxtrace-c
       - name: Run Java Maven sample
         run: java engines/java/NoxtracePomAudit.java examples/pom-sample.xml
-
 
   rust-smoke:
     runs-on: ubuntu-latest
